@@ -98,6 +98,32 @@ class NormalizeTests(unittest.TestCase):
                 {"@timestamp", "host.name", "reg.key.path", "reg.key.name", "file.name", "file.path"},
             )
 
+    def test_blank_key_name_falls_back_to_key_path_leaf(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source = Path(temp_dir) / "SOFTWARE-BlankKeyName.json"
+            source.write_text(
+                json.dumps(
+                    {
+                        "KeyPath": "ROOT\\Microsoft\\Windows\\CurrentVersion\\Run",
+                        "KeyName": " ",
+                        "LastWriteTime": "2026-05-19T03:00:00Z",
+                        "Values": [
+                            {
+                                "ValueName": "Updater",
+                                "ValueType": "RegSz",
+                                "ValueData": "C:\\Users\\Public\\updater.exe",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            records = normalize_recmd_json(source, host_name="WIN10-LAB")
+
+            self.assertEqual(len(records), 1)
+            self.assertEqual(records[0]["reg.key.name"], "Run")
+
     def test_command_processor_autorun_uses_minimum_schema(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             source = Path(temp_dir) / "NTUSER-alice-Software%5CMicrosoft%5CCommandProcessor.json"
