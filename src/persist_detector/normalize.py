@@ -74,7 +74,7 @@ def iter_key_nodes(node: Any) -> Iterable[dict[str, Any]]:
 
 
 def normalize_key_path(key_path: str, context: SourceContext) -> str:
-    path = key_path.replace("/", "\\").strip("\\")
+    path = key_path.replace("/", "\\").strip().strip("\\")
     upper = path.upper()
 
     if upper == "ROOT":
@@ -180,7 +180,7 @@ def normalize_key_name(value: Any, key_path: str) -> str:
         if key_name:
             return key_name
 
-    return key_path.rsplit("\\", 1)[-1].strip()
+    return key_path.strip("\\").rsplit("\\", 1)[-1].strip()
 
 
 def build_record(
