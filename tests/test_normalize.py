@@ -62,6 +62,7 @@ class NormalizeTests(unittest.TestCase):
             self.assertEqual(lines[0]["reg.key.name"], "Run")
             self.assertEqual(lines[0]["file.name"], "Updater")
             self.assertEqual(lines[0]["file.path"], "C:\\Users\\Public\\updater.exe")
+            self.assertEqual(lines[1]["file.path"], "C:\\Temp\\evil.exe")
             self.assertEqual(
                 set(lines[0]),
                 {"@timestamp", "host.name", "reg.key.path", "reg.key.name", "file.name", "file.path"},
@@ -179,6 +180,7 @@ class NormalizeTests(unittest.TestCase):
 
             self.assertEqual(len(records), 1)
             self.assertEqual(records[0]["file.name"], "AutoRun")
+            self.assertEqual(records[0]["file.path"], "C:\\Users\\Public\\course-test.ps1")
             self.assertEqual(
                 set(records[0]),
                 {"@timestamp", "host.name", "reg.key.path", "reg.key.name", "file.name", "file.path"},
