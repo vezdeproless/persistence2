@@ -1,0 +1,72 @@
+{
+  "type": "monitor",
+  "name": "Windows persistence - rare executable paths",
+  "monitor_type": "query_level_monitor",
+  "enabled": true,
+  "schedule": {
+    "period": {
+      "interval": 30,
+      "unit": "MINUTES"
+    }
+  },
+  "inputs": [
+    {
+      "search": {
+        "indices": [
+          "windows-persistence-registry"
+        ],
+        "query": {
+          "size": 0,
+          "query": {
+            "bool": {
+              "filter": [
+                {
+                  "range": {
+                    "@timestamp": {
+                      "gte": "now-30d"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "aggs": {
+            "rare_paths": {
+              "terms": {
+                "field": "file.path",
+                "size": 10000,
+                "order": {
+                  "_count": "asc"
+                },
+                "min_doc_count": 1
+              },
+              "aggs": {
+                "rare_only": {
+                  "bucket_selector": {
+                    "buckets_path": {
+                      "occurrences": "_count"
+                    },
+                    "script": "params.occurrences <= 1"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "triggers": [
+    {
+      "name": "Rare executable path observed",
+      "severity": "3",
+      "condition": {
+        "script": {
+          "source": "ctx.results[0].aggregations.rare_paths.buckets.length > 0",
+          "lang": "painless"
+        }
+      },
+      "actions": []
+    }
+  ]
+}

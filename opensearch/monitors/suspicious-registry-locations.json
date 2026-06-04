@@ -1,0 +1,101 @@
+{
+  "type": "monitor",
+  "name": "Windows persistence - suspicious registry locations",
+  "monitor_type": "query_level_monitor",
+  "enabled": true,
+  "schedule": {
+    "period": {
+      "interval": 10,
+      "unit": "MINUTES"
+    }
+  },
+  "inputs": [
+    {
+      "search": {
+        "indices": [
+          "windows-persistence-registry"
+        ],
+        "query": {
+          "size": 25,
+          "query": {
+            "bool": {
+              "filter": [
+                {
+                  "range": {
+                    "@timestamp": {
+                      "gte": "now-30d"
+                    }
+                  }
+                }
+              ],
+              "should": [
+                {
+                  "wildcard": {
+                    "reg.key.path": {
+                      "value": "*Software*Microsoft*Netsh*",
+                      "case_insensitive": true
+                    }
+                  }
+                },
+                {
+                  "wildcard": {
+                    "reg.key.path": {
+                      "value": "*Software*Microsoft*Windows NT*CurrentVersion*Image File Execution Options*",
+                      "case_insensitive": true
+                    }
+                  }
+                },
+                {
+                  "wildcard": {
+                    "reg.key.path": {
+                      "value": "*Software*Microsoft*Windows NT*CurrentVersion*SilentProcessExit*",
+                      "case_insensitive": true
+                    }
+                  }
+                },
+                {
+                  "wildcard": {
+                    "reg.key.path": {
+                      "value": "*Software*Microsoft*Windows NT*CurrentVersion*AppCompatFlags*",
+                      "case_insensitive": true
+                    }
+                  }
+                },
+                {
+                  "wildcard": {
+                    "reg.key.path": {
+                      "value": "*System*ControlSet001*Control*Lsa*",
+                      "case_insensitive": true
+                    }
+                  }
+                },
+                {
+                  "wildcard": {
+                    "reg.key.path": {
+                      "value": "*Control Panel*Desktop*",
+                      "case_insensitive": true
+                    }
+                  }
+                }
+              ],
+              "minimum_should_match": 1
+            }
+          }
+        }
+      }
+    }
+  ],
+  "triggers": [
+    {
+      "name": "Suspicious registry persistence location observed",
+      "severity": "2",
+      "condition": {
+        "script": {
+          "source": "ctx.results[0].hits.total.value > 0",
+          "lang": "painless"
+        }
+      },
+      "actions": []
+    }
+  ]
+}
