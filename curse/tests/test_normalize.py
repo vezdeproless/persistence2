@@ -1,0 +1,191 @@
+from __future__ import annotations
+
+import json
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from persist_detector.normalize import normalize_directory, normalize_recmd_json
+
+
+class NormalizeTests(unittest.TestCase):
+    def test_flattens_values_filters_noise_and_formats_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            input_dir = Path(temp_dir)
+            source = input_dir / "SOFTWARE-Microsoft%5CWindows%5CCurrentVersion%5CRun.json"
+            source.write_text(
+                json.dumps(
+                    {
+                        "KeyPath": "ROOT\\Microsoft\\Windows\\CurrentVersion\\Run",
+                        "KeyName": "Run",
+                        "LastWriteTime": "2026-05-19 12:34:56.1234567",
+                        "Values": [
+                            {
+                                "ValueName": "Updater",
+                                "ValueType": "RegSz",
+                                "ValueData": " C:\\Users\\Public\\updater.exe ",
+                            },
+                            {"ValueName": "Empty", "ValueType": "RegSz", "ValueData": ""},
+                            {"ValueName": "Numeric", "ValueType": "RegDword", "ValueData": "1"},
+                            {"ValueName": "NoType", "ValueData": "C:\\bad.exe"},
+                        ],
+                        "SubKeys": [
+                            {
+                                "KeyPath": "ROOT\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon",
+                                "KeyName": "Winlogon",
+                                "LastWriteTime": "2026-05-19T01:00:00+00:00",
+                                "Values": [
+                                    {
+                                        "ValueName": "Shell",
+                                        "ValueType": "RegSz",
+                                        "ValueData": "explorer.exe, C:\\Temp\\evil.exe",
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            output = input_dir / "Registry.json"
+            count = normalize_directory(input_dir, output, host_name="WIN10-LAB")
+
+            self.assertEqual(count, 2)
+            lines = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
+            self.assertEqual(lines[0]["@timestamp"], "2026-05-19T09:34:56")
+            self.assertEqual(lines[0]["host.name"], "WIN10-LAB")
+            self.assertEqual(lines[0]["reg.key.path"], "Software\\Microsoft\\Windows\\CurrentVersion\\Run")
+            self.assertEqual(lines[0]["reg.key.name"], "Run")
+            self.assertEqual(lines[0]["file.name"], "Updater")
+            self.assertEqual(lines[0]["file.path"], "C:\\Users\\Public\\updater.exe")
+            self.assertEqual(lines[1]["file.path"], "C:\\Temp\\evil.exe")
+            self.assertEqual(
+                set(lines[0]),
+                {"@timestamp", "host.name", "reg.key.path", "reg.key.name", "file.name", "file.path"},
+            )
+            self.assertEqual(lines[1]["reg.key.name"], "Winlogon")
+
+    def test_user_hive_root_is_renamed_without_extra_user_field(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source = Path(temp_dir) / "NTUSER-alice-Environment.json"
+            source.write_text(
+                json.dumps(
+                    {
+                        "KeyPath": "ROOT\\Environment",
+                        "KeyName": "Environment",
+                        "LastWriteTime": "2026-05-19T03:00:00Z",
+                        "Values": [
+                            {
+                                "ValueName": "UserInitMprLogonScript",
+                                "ValueType": "RegSz",
+                                "ValueData": "\\\\fileserver\\netlogon\\login.bat",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            records = normalize_recmd_json(source)
+
+            self.assertEqual(len(records), 1)
+            self.assertEqual(records[0]["reg.key.path"], "NTUSER.DAT-alice\\Environment")
+            self.assertEqual(
+                set(records[0]),
+                {"@timestamp", "host.name", "reg.key.path", "reg.key.name", "file.name", "file.path"},
+            )
+
+    def test_blank_key_name_falls_back_to_key_path_leaf(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source = Path(temp_dir) / "SOFTWARE-BlankKeyName.json"
+            source.write_text(
+                json.dumps(
+                    {
+                        "KeyPath": "ROOT\\Microsoft\\Windows\\CurrentVersion\\Run",
+                        "KeyName": " ",
+                        "LastWriteTime": "2026-05-19T03:00:00Z",
+                        "Values": [
+                            {
+                                "ValueName": "Updater",
+                                "ValueType": "RegSz",
+                                "ValueData": "C:\\Users\\Public\\updater.exe",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            records = normalize_recmd_json(source, host_name="WIN10-LAB")
+
+            self.assertEqual(len(records), 1)
+            self.assertEqual(records[0]["reg.key.name"], "Run")
+
+    def test_trailing_space_key_path_uses_last_non_empty_path_segment(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source = Path(temp_dir) / "SOFTWARE-TrailingSpaceKeyPath.json"
+            source.write_text(
+                json.dumps(
+                    {
+                        "KeyPath": "ROOT\\Classes\\CLSID\\{047ea9a0-93bb-415f-a1c3-d7aeb3dd5087}\\LocalServer32\\ ",
+                        "KeyName": " ",
+                        "LastWriteTime": "2026-05-19T03:00:00Z",
+                        "Values": [
+                            {
+                                "ValueName": "Owners",
+                                "ValueType": "RegSz",
+                                "ValueData": "bth.inf",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            records = normalize_recmd_json(source, host_name="WIN10-LAB")
+
+            self.assertEqual(len(records), 1)
+            self.assertEqual(
+                records[0]["reg.key.path"],
+                "Software\\Classes\\CLSID\\{047ea9a0-93bb-415f-a1c3-d7aeb3dd5087}\\LocalServer32",
+            )
+            self.assertEqual(records[0]["reg.key.name"], "LocalServer32")
+
+    def test_command_processor_autorun_uses_minimum_schema(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source = Path(temp_dir) / "NTUSER-alice-Software%5CMicrosoft%5CCommandProcessor.json"
+            source.write_text(
+                json.dumps(
+                    {
+                        "KeyPath": "ROOT\\Software\\Microsoft\\Command Processor",
+                        "KeyName": "Command Processor",
+                        "LastWriteTime": "2026-05-19T03:00:00Z",
+                        "Values": [
+                            {
+                                "ValueName": "AutoRun",
+                                "ValueType": "RegSz",
+                                "ValueData": "powershell.exe -File C:\\Users\\Public\\course-test.ps1",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            records = normalize_recmd_json(source)
+
+            self.assertEqual(len(records), 1)
+            self.assertEqual(records[0]["file.name"], "AutoRun")
+            self.assertEqual(records[0]["file.path"], "C:\\Users\\Public\\course-test.ps1")
+            self.assertEqual(
+                set(records[0]),
+                {"@timestamp", "host.name", "reg.key.path", "reg.key.name", "file.name", "file.path"},
+            )
+
+
+if __name__ == "__main__":
+    unittest.main()

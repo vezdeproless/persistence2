@@ -1,0 +1,81 @@
+{
+  "type": "monitor",
+  "name": "Windows persistence - uncommon persistence entries",
+  "monitor_type": "query_level_monitor",
+  "enabled": true,
+  "schedule": {
+    "period": {
+      "interval": 30,
+      "unit": "MINUTES"
+    }
+  },
+  "inputs": [
+    {
+      "search": {
+        "indices": [
+          "windows-persistence-registry"
+        ],
+        "query": {
+          "size": 0,
+          "query": {
+            "bool": {
+              "filter": [
+                {
+                  "range": {
+                    "@timestamp": {
+                      "gte": "now-30d"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "aggs": {
+            "entries": {
+              "multi_terms": {
+                "terms": [
+                  {
+                    "field": "reg.key.path"
+                  },
+                  {
+                    "field": "file.name"
+                  },
+                  {
+                    "field": "file.path"
+                  }
+                ],
+                "size": 10000,
+                "order": {
+                  "_count": "asc"
+                }
+              },
+              "aggs": {
+                "uncommon_only": {
+                  "bucket_selector": {
+                    "buckets_path": {
+                      "occurrences": "_count"
+                    },
+                    "script": "params.occurrences <= 1"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "triggers": [
+    {
+      "name": "Uncommon persistence entry observed",
+      "severity": "3",
+      "condition": {
+        "script": {
+          "source": "ctx.results[0].aggregations.entries.buckets.length > 0",
+          "lang": "painless"
+        }
+      },
+      "actions": []
+    }
+  ]
+}

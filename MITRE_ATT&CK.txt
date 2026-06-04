@@ -1,0 +1,66 @@
+Разработать модуль для детекции persistence-механизмов в Windows (реестр, службы, планировщик).
+
+https://attack.mitre.org/tactics/TA0003/ Persistence
+https://attack.mitre.org/techniques/T1547 Boot or Logon Autostart Execution 
+https://attack.mitre.org/techniques/T1547/001 Registry Run Keys / Startup Folder = run keys
+LSASS LSA DLL 
+
+LSASS (Local Security Authority Subsystem Service) — это критически важный процесс Windows (lsass.exe), отвечающий за авторизацию пользователей, смену паролей и создание маркеров доступа. 
+LSA (Local Security Authority) — это подсистема безопасности, работающая внутри LSASS, которая управляет локальной политикой безопасности, аутентификацией и хранит учетные данные в памяти.
+
+https://attack.mitre.org/techniques/T1547/014 Active Setup 
+https://attack.mitre.org/techniques/T1037 Boot or Logon Initialization Scripts 
+https://attack.mitre.org/techniques/T1037/001 Logon Script (Windows) 
+https://attack.mitre.org/techniques/T1037/003  Network Logon Script 
+https://attack.mitre.org/techniques/T1543/003 Windows Service 
+https://attack.mitre.org/techniques/T1546/001 https://attack.mitre.org/techniques/T1546/002 https://attack.mitre.org/techniques/T1546/013
+https://attack.mitre.org/techniques/T1574/001 DLL 
+https://attack.mitre.org/techniques/T1112 Modify Registry 
+https://attack.mitre.org/techniques/T1137 Office Application Startup 
+https://attack.mitre.org/techniques/T1053  Scheduled Task/Job 
+https://attack.mitre.org/techniques/T1053/005 Scheduled Task 
+https://attack.mitre.org/techniques/T1053/002 At 
+
+05/05/2026 09:47:48 INFO: You can access the web interface https://<wazuh-dashboard-ip>:443
+    User: admin
+    Password: GGwrn8VJ1g8Y1FBhsTPmzAO6?WwDcc*2
+05/05/2026 09:47:48 INFO: Installation finished.
+
+MySecure_P@ssw0rd2024!
+
+curl -k -u admin:'MySecure_P@ssw0rd2024!' \
+  "https://localhost:9200/windows-persistence-registry/_search?q=course-persistence&pretty"
+
+
+ (Get-ItemProperty "HKCU:\Control Panel\Desktop")."SCRNSAVE.EXE"    
+ (Get-ItemProperty "HKCU:\Software\Microsoft\Command Processor").AutoRun 
+ Get-ItemProperty "HKCU:\Control Panel\Desktop" | Format-List *                            
+  Get-ItemProperty "HKCU:\Software\Microsoft\Command Processor" | Format-List *  
+Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" | Select-Object CourseTestRun
+Get-ItemProperty "HKCU:\Control Panel\Desktop" | Select-Object SCRNSAVE.EXE
+Get-ItemProperty "HKCU:\Software\Microsoft\Command Processor" | Select-Object AutoRun
+
+PS C:\Users\test\Desktop> New-Item -Path "HKCU:\Software\Microsoft\Command Processor" -Force                            >> New-ItemProperty `                                                                                                   >>   -Path "HKCU:\Software\Microsoft\Command Processor" `                                                               >>   -Name "AutoRun" `                                                                                                  >>   -Value "powershell.exe -ExecutionPolicy Bypass -File C:\Users\Public\course-test.ps1" `                            >>   -PropertyType String `                                                                                             >>   -Force 
+PS C:\Users\test\Desktop> New-ItemProperty `                                                                            >>   -Path "HKCU:\Control Panel\Desktop" `                                                                              >>   -Name "SCRNSAVE.EXE" `                                                                                             >>   -Value "C:\Windows\System32\course-test.scr" `                                                                     >>   -PropertyType String `                                                                                             >>   -Force     
+PS C:\Users\test\Desktop> New-ItemProperty `                                                                            >>   -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" `                                                      >>   -Name "CourseTestRun" `                                                                                            >>   -Value "C:\Users\Public\course-test.exe" `                                                                         >>   -PropertyType String `                                                                                             >>   -Force  
+PS C:\Users\test\Desktop> REG ADD "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnceEx\0001" /v 2 /t REG_SZ /d "rundll32.exe C:\Path\AtomicRedTeam1.dll,DllMain" /f  
+PS C:\Users\test\Desktop> REG QUERY "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /V "Atomic Red Team" 
+PS C:\Users\test\Desktop> REG ADD "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnceEx\0001" /v 1 /t REG_SZ /d "rundll32.exe C:\Users\test\Desktop\AtomicRedTeam.dll,DllMain" /f
+PS C:\Users\test\Desktop> cl /LD test.cpp /Fe:AtomicRedTeam.dll
+PS C:\Users\test\Desktop> g++ --version
+PS C:\Users\test\Desktop> C:\MinGW\bin\g++.exe --version
+PS C:\Users\test\Desktop> REG ADD "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /V "Atomic Red Team" /t REG_SZ /F /D "cmd.exe /c echo Persistence test successful > C:\Users\test\Desktop\persistence_test.txt"
+PS C:\Users\test\Desktop> C:\MinGW\bin\g++.exe -shared -o AtomicRedTeam.dll test.cpp -Wl,--subsystem,windows
+
+
+
+$LabDir = "C:\Users\Public\course-persistence"
+New-Item -ItemType Directory -Path $LabDir -Force | Out-Null
+
+Set-Content "$LabDir\run.ps1" 'Add-Content C:\Users\Public\course-persistence\run-fired.txt "HKCU Run fired"'
+Set-Content "$LabDir\cmd-autorun.ps1" 'Add-Content C:\Users\Public\course-persistence\cmd-autorun-fired.txt "Command Processor AutoRun fired"'
+Set-Content "$LabDir\logon-script.cmd" 'echo UserInitMprLogonScript fired>>C:\Users\Public\course-persistence\logon-script-fired.txt'
+Set-Content "$LabDir\active-setup.ps1" 'Add-Content C:\Users\Public\course-persistence\active-setup-fired.txt "Active Setup fired"'
+Set-Content "$LabDir\runonceex.cmd" 'echo RunOnceEx fired>>C:\Users\Public\course-persistence\runonceex-fired.txt'
+
+Copy-Item C:\Windows\System32\notepad.exe "$LabDir\course-screen.scr" -Force

@@ -1,0 +1,109 @@
+{
+  "type": "monitor",
+  "name": "Windows persistence - suspicious executable paths",
+  "monitor_type": "query_level_monitor",
+  "enabled": true,
+  "schedule": {
+    "period": {
+      "interval": 10,
+      "unit": "MINUTES"
+    }
+  },
+  "inputs": [
+    {
+      "search": {
+        "indices": [
+          "windows-persistence-registry"
+        ],
+        "query": {
+          "size": 25,
+          "query": {
+            "bool": {
+              "filter": [
+                {
+                  "range": {
+                    "@timestamp": {
+                      "gte": "now-30d"
+                    }
+                  }
+                }
+              ],
+              "should": [
+                {
+                  "wildcard": {
+                    "file.path": {
+                      "value": "*\\Users\\Public\\*",
+                      "case_insensitive": true
+                    }
+                  }
+                },
+                {
+                  "wildcard": {
+                    "file.path": {
+                      "value": "*\\AppData\\*",
+                      "case_insensitive": true
+                    }
+                  }
+                },
+                {
+                  "wildcard": {
+                    "file.path": {
+                      "value": "*\\Temp\\*",
+                      "case_insensitive": true
+                    }
+                  }
+                },
+                {
+                  "wildcard": {
+                    "file.path": {
+                      "value": "*\\Downloads\\*",
+                      "case_insensitive": true
+                    }
+                  }
+                },
+                {
+                  "wildcard": {
+                    "file.path": {
+                      "value": "http*",
+                      "case_insensitive": true
+                    }
+                  }
+                },
+                {
+                  "wildcard": {
+                    "file.path": {
+                      "value": "*powershell*",
+                      "case_insensitive": true
+                    }
+                  }
+                },
+                {
+                  "wildcard": {
+                    "file.path": {
+                      "value": "*.scr*",
+                      "case_insensitive": true
+                    }
+                  }
+                }
+              ],
+              "minimum_should_match": 1
+            }
+          }
+        }
+      }
+    }
+  ],
+  "triggers": [
+    {
+      "name": "Suspicious executable path observed",
+      "severity": "2",
+      "condition": {
+        "script": {
+          "source": "ctx.results[0].hits.total.value > 0",
+          "lang": "painless"
+        }
+      },
+      "actions": []
+    }
+  ]
+}
