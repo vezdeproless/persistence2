@@ -13,6 +13,16 @@ VALUE_TYPE_KEYS = ("ValueType", "ValueTypeName", "Type", "DataType")
 VALUE_NAME_KEYS = ("ValueName", "Name")
 VALUE_DATA_KEYS = ("ValueData", "Data", "Value", "ValueDataRaw", "DataRaw")
 TIMESTAMP_KEYS = ("LastWriteTime", "LastWriteTimestamp", "LastWriteTimeUtc", "Timestamp")
+FILE_PATH_PATTERN = re.compile(
+    r"(?i)((?:[A-Z]:\\|%[A-Z0-9_]+%\\|\\\\).*?\."
+    r"(?:exe|dll|ps1|bat|cmd|vbs|vbe|js|jse|wsf|hta|scr|cpl|msc|msi|lnk))"
+)
+POWERSHELL_FILE_PATTERN = re.compile(r"(?i)(?:^|\s)-file\s+(.+)")
+COMMAND_PREFIX_PATTERN = re.compile(
+    r"(?i)^(?:\"?(?:[A-Z]:\\|%[A-Z0-9_]+%\\|\\\\).*?\."
+    r"(?:exe|com|bat|cmd|ps1|vbs|vbe|js|jse|wsf|hta|scr)\"?|[A-Z0-9_.-]+\."
+    r"(?:exe|com|bat|cmd|ps1|vbs|vbe|js|jse|wsf|hta|scr))(?:\s|,\s)"
+)
 
 
 @dataclass(frozen=True)
@@ -166,12 +176,34 @@ def parse_timestamp(value: Any) -> str | None:
 
 def normalize_value_data(value: Any) -> Any:
     if isinstance(value, str):
-        return value.strip()
+        text = value.strip()
+        return extract_file_path(text) or text
 
     if isinstance(value, list):
         return [normalize_value_data(item) for item in value]
 
     return value
+
+
+def clean_file_path(value: str) -> str:
+    return value.strip().strip('"').rstrip(",;|")
+
+
+def extract_file_path(value: str) -> str | None:
+    powershell_file = POWERSHELL_FILE_PATTERN.search(value)
+    if powershell_file:
+        match = FILE_PATH_PATTERN.search(powershell_file.group(1))
+        if match:
+            return clean_file_path(match.group(1))
+
+    if not COMMAND_PREFIX_PATTERN.search(value):
+        return None
+
+    match = FILE_PATH_PATTERN.search(value)
+    if match:
+        return clean_file_path(match.group(1))
+
+    return None
 
 
 def normalize_key_name(value: Any, key_path: str) -> str:
