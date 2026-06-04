@@ -174,6 +174,15 @@ def normalize_value_data(value: Any) -> Any:
     return value
 
 
+def normalize_key_name(value: Any, key_path: str) -> str:
+    if value is not None:
+        key_name = str(value).strip()
+        if key_name:
+            return key_name
+
+    return key_path.rsplit("\\", 1)[-1].strip()
+
+
 def build_record(
     *,
     node: dict[str, Any],
@@ -189,7 +198,7 @@ def build_record(
 
     raw_key_path = str(node.get("KeyPath") or node.get("Path") or node.get("KeyName") or "ROOT")
     key_path = normalize_key_path(raw_key_path, context)
-    key_name = str(node.get("KeyName") or key_path.rsplit("\\", 1)[-1])
+    key_name = normalize_key_name(node.get("KeyName"), key_path)
     value_name = first_present(value, VALUE_NAME_KEYS)
     timestamp = parse_timestamp(first_present(node, TIMESTAMP_KEYS))
 
