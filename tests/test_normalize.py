@@ -124,6 +124,36 @@ class NormalizeTests(unittest.TestCase):
             self.assertEqual(len(records), 1)
             self.assertEqual(records[0]["reg.key.name"], "Run")
 
+    def test_trailing_space_key_path_uses_last_non_empty_path_segment(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source = Path(temp_dir) / "SOFTWARE-TrailingSpaceKeyPath.json"
+            source.write_text(
+                json.dumps(
+                    {
+                        "KeyPath": "ROOT\\Classes\\CLSID\\{047ea9a0-93bb-415f-a1c3-d7aeb3dd5087}\\LocalServer32\\ ",
+                        "KeyName": " ",
+                        "LastWriteTime": "2026-05-19T03:00:00Z",
+                        "Values": [
+                            {
+                                "ValueName": "Owners",
+                                "ValueType": "RegSz",
+                                "ValueData": "bth.inf",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            records = normalize_recmd_json(source, host_name="WIN10-LAB")
+
+            self.assertEqual(len(records), 1)
+            self.assertEqual(
+                records[0]["reg.key.path"],
+                "Software\\Classes\\CLSID\\{047ea9a0-93bb-415f-a1c3-d7aeb3dd5087}\\LocalServer32",
+            )
+            self.assertEqual(records[0]["reg.key.name"], "LocalServer32")
+
     def test_command_processor_autorun_uses_minimum_schema(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             source = Path(temp_dir) / "NTUSER-alice-Software%5CMicrosoft%5CCommandProcessor.json"
